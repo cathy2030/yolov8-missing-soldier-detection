@@ -1,1 +1,1 @@
-# yolov8-missing-soldier-detection
+# yolov11s-1280-missing-soldier-detection
