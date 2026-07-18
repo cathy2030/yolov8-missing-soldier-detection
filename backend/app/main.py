@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import Base, engine
 from .routers import auth, sites, sessions, events, dashboard, uploads
+from fastapi import HTTPException
+
 
 logging.basicConfig(level=logging.INFO)
 settings = get_settings()
@@ -36,3 +38,33 @@ app.mount("/evidence", StaticFiles(directory=EVIDENCE_DIR), name="evidence")
 def health():
     return {"status": "ok"}
 
+
+
+@app.get("/setup/{secret}")
+def setup_admin(secret: str):
+    # one-time admin bootstrap; remove after use
+    if secret != os.getenv("SETUP_SECRET", ""):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from app.database import SessionLocal
+    from app.security import hash_password
+    from app import models
+    db = SessionLocal()
+    try:
+        email = os.getenv("ADMIN_EMAIL", "admin@parade.local")
+        existing = db.query(models.User).filter_by(email=email).first()
+        if existing:
+            existing.hashed_password = hash_password(os.getenv("ADMIN_PASSWORD", ""))
+            db.commit()
+            return {"status": "admin password reset", "email": email}
+        db.add(models.User(
+            email=email,
+            full_name=os.getenv("ADMIN_FULL_NAME", "Administrator"),
+            hashed_password=hash_password(os.getenv("ADMIN_PASSWORD", "")),
+            role="admin",
+        ))
+        db.commit()
+        return {"status": "admin created", "email": email}
+    finally:
+        db.close()
+        
+        
